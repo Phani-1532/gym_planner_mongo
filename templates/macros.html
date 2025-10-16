@@ -1,0 +1,6 @@
+{% macro nav_link(endpoint, text, icon_class) -%}
+<a href="{{ url_for(endpoint) if endpoint else '#' }}" target="_blank" rel="noopener noreferrer"
+    class="nav-link text-white {% if request.endpoint and request.endpoint.endswith(endpoint) %}active{% endif %}">
+    <i class="fas {{ icon_class }} me-2"></i>{{ text }}
+</a>
+{%- endmacro %}

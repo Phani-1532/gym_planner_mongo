@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "macros.html" import nav_link with context %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column vh-100">
+    <nav class="navbar navbar-expand-lg bg-dark border-bottom border-body" data-bs-theme="dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="fas fa-dumbbell"></i> <!-- Icon -->
+                Gym Planner
+            </a>
+            <span class="navbar-text mx-auto">
+                Welcome, {{ session.username or current_user.first_name }}!
+            </span>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-danger ms-auto">Logout</a>
+        </div>
+    </nav>
+
+    <div class="d-flex flex-grow-1">
+        <!-- Sidebar -->
+        <aside class="d-flex flex-column flex-shrink-0 p-3" style="width: 280px; background-color: #1e1e1e;">
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="sidebar-item">
+                    <a href="{{ url_for('dashboard') }}"
+                        class="nav-link text-white {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                        <i class="fas fa-calendar-week me-2"></i><span class="sidebar-item-text">Weekly Planner</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="{{ url_for('monthly_view') }}"
+                        class="nav-link text-white {% if request.endpoint == 'monthly_view' %}active{% endif %}">
+                        <i class="fas fa-calendar-alt me-2"></i><span class="sidebar-item-text">Monthly Plan</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="{{ url_for('exercise_library') }}"
+                        class="nav-link text-white {% if request.endpoint == 'exercise_library' %}active{% endif %}">
+                        <i class="fas fa-book me-2"></i><span class="sidebar-item-text">Exercise Library</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="{{ url_for('progress_tracker') }}"
+                        class="nav-link text-white {% if request.endpoint == 'progress_tracker' %}active{% endif %}">
+                        <i class="fas fa-chart-line me-2"></i><span class="sidebar-item-text">Progress Tracker</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="{{ url_for('goal_setting') }}"
+                        class="nav-link text-white {% if request.endpoint == 'goal_setting' %}active{% endif %}">
+                        <i class="fas fa-bullseye me-2"></i><span class="sidebar-item-text">Goal Setting</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="{{ url_for('diet_plan') }}"
+                        class="nav-link text-white {% if request.endpoint == 'diet_plan' %}active{% endif %}">
+                        <i class="fas fa-utensils me-2"></i><span class="sidebar-item-text">Diet Plan</span>
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-grow-1 p-4" style="overflow-y: auto;">
+            {% block main_content %}
+            <h1 class="mt-4">Your Weekly Planner</h1>
+            <p>This is where your weekly workout plan will go. Select a module from the sidebar to get started.</p>
+            <!-- The content for each module will be rendered here -->
+            {% endblock main_content %}
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block body_end_scripts %}
+<!-- Font Awesome for Icons -->
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+{% endblock %}
