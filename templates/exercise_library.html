@@ -1,8 +1,163 @@
 {% extends "dashboard.html" %}
 
 {% block title %}Exercise Library - Gym Planner{% endblock %}
-
 {% block main_content %}
-<h1 class="mt-4">Exercise Library</h1>
-<p>This page is under construction. You will be able to view, add, and edit exercises here.</p>
+<div class="d-flex justify-content-between align-items-center mb-4 mt-4">
+    <h1>Exercise Library</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExerciseModal">
+        <i class="fas fa-plus"></i> Add Custom Exercise
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th scope="col">Exercise Name</th>
+                    <th scope="col">Muscle Group</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exercise in all_exercises %}
+                <tr>
+                    <td>{{ exercise.name }}</td>
+                    <td>{{ exercise.muscle_group }}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-secondary edit-exercise-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editExerciseLibraryModal"
+                                data-exercise-id="{{ exercise._id }}"
+                                data-exercise-name="{{ exercise.name }}"
+                                data-muscle-group="{{ exercise.muscle_group }}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-exercise-btn"
+                                data-bs-toggle="modal" data-bs-target="#deleteExerciseModal"
+                                data-exercise-id="{{ exercise._id }}"
+                                data-exercise-name="{{ exercise.name }}"><i class="fas fa-trash-alt"></i> Delete</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="2" class="text-center text-muted">No exercises found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Custom Exercise Modal -->
+<div class="modal fade" id="addExerciseModal" tabindex="-1" aria-labelledby="addExerciseModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('exercise_library') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addExerciseModalLabel">Add Custom Exercise</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="exercise_name" class="form-label">Exercise Name</label>
+                        <input type="text" class="form-control" id="exercise_name" name="exercise_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="muscle_group" class="form-label">Muscle Group</label>
+                        <input type="text" class="form-control" id="muscle_group" name="muscle_group"
+                            placeholder="e.g., Chest, Back, Legs" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Exercise</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Exercise Modal -->
+<div class="modal fade" id="editExerciseLibraryModal" tabindex="-1" aria-labelledby="editExerciseModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editExerciseForm" method="POST" action="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editExerciseModalLabel">Edit Exercise</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_exercise_name" class="form-label">Exercise Name</label>
+                        <input type="text" class="form-control" id="edit_exercise_name" name="edit_exercise_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_muscle_group" class="form-label">Muscle Group</label>
+                        <input type="text" class="form-control" id="edit_muscle_group" name="edit_muscle_group" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Exercise Confirmation Modal -->
+<div class="modal fade" id="deleteExerciseModal" tabindex="-1" aria-labelledby="deleteExerciseModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="deleteExerciseForm" method="POST" action="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteExerciseModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the exercise: <strong id="exerciseNameToDelete"></strong>?</p>
+                    <p class="text-danger"><small>This action cannot be undone. The exercise will only be deleted if it is not currently in use in a workout plan.</small></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock main_content %}
+
+{% block body_end_scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Handle Edit Modal
+    const editModal = document.getElementById('editExerciseLibraryModal');
+    editModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const exerciseId = button.dataset.exerciseId;
+        const exerciseName = button.dataset.exerciseName;
+        const muscleGroup = button.dataset.muscleGroup;
+
+        const form = editModal.querySelector('#editExerciseForm');
+        form.action = `/edit-exercise-library/${exerciseId}`;
+        editModal.querySelector('#edit_exercise_name').value = exerciseName;
+        editModal.querySelector('#edit_muscle_group').value = muscleGroup;
+    });
+
+    // Handle Delete Modal
+    const deleteModal = document.getElementById('deleteExerciseModal');
+    deleteModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const exerciseId = button.dataset.exerciseId;
+        const exerciseName = button.dataset.exerciseName;
+
+        const form = deleteModal.querySelector('#deleteExerciseForm');
+        form.action = `/delete-exercise-library/${exerciseId}`;
+        deleteModal.querySelector('#exerciseNameToDelete').textContent = exerciseName;
+    });
+});
+</script>
+{% endblock %}

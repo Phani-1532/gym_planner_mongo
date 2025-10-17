@@ -1,8 +1,209 @@
 {% extends "dashboard.html" %}
 
 {% block title %}Monthly Plan - Gym Planner{% endblock %}
-
 {% block main_content %}
-<h1 class="mt-4">Monthly Plan</h1>
-<p>This page is under construction. Your monthly workout calendar will be displayed here.</p>
+
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background-color: #333;
+        border: 1px solid #333;
+    }
+
+    .calendar-header {
+        text-align: center;
+        font-weight: bold;
+        padding: 0.5rem;
+        background-color: #2a2a2a;
+    }
+
+    .calendar-day {
+        background-color: #1e1e1e;
+        min-height: 120px;
+        padding: 0.5rem;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        transition: background-color 0.2s ease-in-out;
+    }
+
+    .calendar-day.has-workout:hover {
+        background-color: #2a2a2a;
+        cursor: pointer;
+    }
+
+    .calendar-day.other-month {
+        background-color: #161616;
+        color: #6c757d;
+    }
+
+    .calendar-day.is-today .day-number {
+        background-color: #03dac6;
+        color: #000;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+
+    .day-number {
+        font-size: 0.9rem;
+    }
+
+    .workout-title {
+        font-size: 0.8rem;
+        font-weight: bold;
+        color: #03dac6;
+        margin-top: 0.25rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .workout-rest {
+        font-size: 0.8rem;
+        font-weight: bold;
+        color: #28a745;
+        /* Green for rest day */
+        margin-top: 0.25rem;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 mt-4">
+    <h1>{{ selected_date.strftime('%B %Y') }}</h1>
+    <div>
+        {% set prev_month = selected_date.month - 1 %}
+        {% set prev_year = selected_date.year %}
+        {% if prev_month == 0 %}
+        {% set prev_month = 12 %}
+        {% set prev_year = selected_date.year - 1 %}
+        {% endif %}
+        <a href="{{ url_for('monthly_view', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary">&lt;
+            Prev</a>
+
+        <a href="{{ url_for('monthly_view') }}" class="btn btn-outline-secondary">Today</a>
+
+        {% set next_month = selected_date.month + 1 %}
+        {% set next_year = selected_date.year %}
+        {% if next_month == 13 %}
+        {% set next_month = 1 %}
+        {% set next_year = selected_date.year + 1 %}
+        {% endif %}
+        <a href="{{ url_for('monthly_view', year=next_year, month=next_month) }}" class="btn btn-outline-secondary">Next
+            &gt;</a>
+    </div>
+</div>
+
+<div class="calendar-grid">
+    {% for day_name in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+    <div class="calendar-header">{{ day_name }}</div>
+    {% endfor %}
+
+    {% for week in calendar_weeks %}
+    {% for day in week %}
+    {% set day_iso = day.isoformat() %}
+    {% set workout = workouts_by_date.get(day_iso) %}
+    {% set is_other_month = day.month != selected_date.month %}
+    {% set is_today = day == today %}
+    {% set is_sunday = day.weekday() == 6 %}
+    <div class="calendar-day 
+                    {% if is_other_month %}other-month{% endif %} 
+                    {% if is_today %}is-today{% endif %}
+                    {% if workout %}has-workout{% endif %}" {% if workout %} data-bs-toggle="modal"
+        data-bs-target="#workoutDetailModal" data-workout="{{ json_dumps(workout) }}"
+        data-date-str="{{ day.strftime('%A, %B %d, %Y') }}" {% endif %}>
+        <div class="day-number">{{ day.day }}</div>
+        {% if (workout and workout.is_rest_day) or (is_sunday and not workout) %}
+        <div class="workout-rest">Rest Day</div>
+        {% elif workout and workout.title %}
+        <div class="workout-title">{{ workout.title }}</div>
+        {% elif workout and workout.tasks %}
+        <div class="workout-title">{{ workout.tasks|length }} Exercise(s)</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endfor %}
+</div>
+
+<!-- Workout Detail Modal -->
+<div class="modal fade" id="workoutDetailModal" tabindex="-1" aria-labelledby="workoutDetailModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="workoutDetailModalLabel">Workout Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h4 id="modal-workout-title" class="mb-0"></h4>
+                <p id="modal-workout-date" class="text-muted"></p>
+                <div id="modal-workout-notes" class="fst-italic text-muted border-top pt-2 mt-2 mb-3"
+                    style="display: none;"></div>
+                <div id="modal-rest-day-content" class="text-success fw-bold" style="display: none;">
+                    <p>This is a designated Rest Day.</p>
+                </div>
+                <ul id="modal-exercise-list" class="list-group list-group-flush">
+                    <!-- Exercises will be injected here by JavaScript -->
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock main_content %}
+
+{% block body_end_scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var workoutDetailModal = document.getElementById('workoutDetailModal');
+        workoutDetailModal.addEventListener('show.bs.modal', function (event) {
+            var dayElement = event.relatedTarget;
+            var workoutData = JSON.parse(dayElement.getAttribute('data-workout'));
+            var dateStr = dayElement.getAttribute('data-date-str');
+
+            var modalTitle = workoutDetailModal.querySelector('#modal-workout-title');
+            var modalDate = workoutDetailModal.querySelector('#modal-workout-date');
+            var modalNotes = workoutDetailModal.querySelector('#modal-workout-notes');
+            var modalRestDay = workoutDetailModal.querySelector('#modal-rest-day-content');
+            var exerciseList = workoutDetailModal.querySelector('#modal-exercise-list');
+
+            // Reset content
+            exerciseList.innerHTML = '';
+            modalNotes.style.display = 'none';
+            modalRestDay.style.display = 'none';
+
+            // Populate modal
+            modalDate.textContent = dateStr;
+            modalTitle.textContent = workoutData.title || 'Workout Details';
+
+            if (workoutData.notes) {
+                modalNotes.textContent = 'Notes: ' + workoutData.notes;
+                modalNotes.style.display = 'block';
+            }
+
+            if (workoutData.is_rest_day) {
+                modalTitle.textContent = 'Rest Day';
+                modalRestDay.style.display = 'block';
+            } else if (workoutData.tasks && workoutData.tasks.length > 0) {
+                workoutData.tasks.forEach(function (task) {
+                    var li = document.createElement('li');
+                    li.className = 'list-group-item bg-transparent';
+                    li.innerHTML = `<strong>${task.exercise_name}</strong>: ${task.sets.length} sets of ${task.target_reps} reps`;
+                    exerciseList.appendChild(li);
+                });
+            } else {
+                exerciseList.innerHTML = '<li class="list-group-item bg-transparent text-muted">No exercises scheduled for this day.</li>';
+            }
+        });
+    });
+</script>
+{% endblock %}

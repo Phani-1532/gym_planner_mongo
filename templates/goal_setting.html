@@ -1,8 +1,101 @@
 {% extends "dashboard.html" %}
 
 {% block title %}Goal Setting - Gym Planner{% endblock %}
-
 {% block main_content %}
-<h1 class="mt-4">Goal Setting</h1>
-<p>This page is under construction. You will be able to set and manage your fitness goals here.</p>
+<div class="d-flex justify-content-between align-items-center mb-4 mt-4">
+    <h1>Goal Setting & Personal Records</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#setGoalModal">
+        <i class="fas fa-plus"></i> Set/Update Goal
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th scope="col">Exercise</th>
+                    <th scope="col">Current PR (Max Weight)</th>
+                    <th scope="col">Goal Weight</th>
+                    <th scope="col">Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in goal_tracking_list %}
+                <tr>
+                    <td><strong>{{ item.exercise.name }}</strong></td>
+                    <td>
+                        {% if item.pr_weight > 0 %}
+                        {{ "%.2f"|format(item.pr_weight) }} kg
+                        <small class="text-muted d-block">on {{ item.pr_date }}</small>
+                        {% else %}
+                        <span class="text-muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.goal_weight %}
+                        {{ "%.2f"|format(item.goal_weight) }} kg
+                        {% else %}
+                        <span class="text-muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.goal_weight and item.goal_weight > 0 %}
+                        {% set progress = (item.pr_weight / item.goal_weight * 100)|round|int %}
+                        {% set progress = [progress, 100]|min %} {# Cap at 100% #}
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar {% if progress >= 100 %}bg-success{% else %}bg-primary{% endif %}"
+                                role="progressbar" style="width: {{ progress }}%;" aria-valuenow="{{ progress }}"
+                                aria-valuemin="0" aria-valuemax="100">
+                                {{ progress }}%
+                            </div>
+                        </div>
+                        {% else %}
+                        <span class="text-muted">No goal set</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">No exercises found in library.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Set Goal Modal -->
+<div class="modal fade" id="setGoalModal" tabindex="-1" aria-labelledby="setGoalModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('goal_setting') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="setGoalModalLabel">Set/Update Goal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="exercise_id" class="form-label">Exercise</label>
+                        <select class="form-select" name="exercise_id" required>
+                            <option selected disabled value="">Choose an exercise...</option>
+                            {% for exercise in all_exercises %}
+                            <option value="{{ exercise._id }}">{{ exercise.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="goal_weight" class="form-label">Goal Weight (kg)</label>
+                        <input type="number" step="0.01" class="form-control" name="goal_weight" placeholder="e.g., 100"
+                            required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Goal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock main_content %}

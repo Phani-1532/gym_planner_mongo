@@ -9,15 +9,6 @@
             <div class="card-body">
                 <h3 class="card-title text-center mb-4">User Login</h3>
 
-                <!-- Flash Messages -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-                {% endif %}
-                {% endwith %}
-
                 <form method="POST" action="{{ url_for('login') }}">
                     <div class="mb-3">
                         <label for="email" class="form-label">Email address</label>

@@ -1,8 +1,119 @@
 {% extends "dashboard.html" %}
 
 {% block title %}Progress Tracker - Gym Planner{% endblock %}
-
 {% block main_content %}
-<h1 class="mt-4">Progress Tracker</h1>
-<p>This page is under construction. You will be able to track your workout progress and body metrics here.</p>
+<h1 class="mt-4 mb-4">Progress Tracker</h1>
+
+{% if not volume_data.labels %}
+<div class="alert alert-info" role="alert">
+    <h4 class="alert-heading">No Data to Display</h4>
+    <p>It looks like you haven't logged any workouts with weight and reps yet. Once you start recording your sets in the
+        <strong>Weekly Planner</strong>, your progress charts will appear here.
+    </p>
+    <hr>
+    <p class="mb-0">Go to the <a href="{{ url_for('dashboard') }}" class="alert-link">Weekly Planner</a> to get
+        started!</p>
+</div>
+{% else %}
+<div class="row">
+    <!-- Total Volume Chart -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Total Weekly Volume (Weight x Reps)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="volumeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exercise Progression Chart -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5>Max Weight Progression by Exercise</h5>
+                    <div class="col-md-4">
+                        <select id="exerciseSelect" class="form-select">
+                            {% for exercise_name in exercise_progression.keys()|sort %}
+                            <option value="{{ exercise_name }}">{{ exercise_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="exerciseChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock main_content %}
+
+{% block body_end_scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const volumeData = {{ json_dumps(volume_data) | safe
+    }};
+    const progressionData = {{ json_dumps(exercise_progression) | safe }};
+
+    const chartOptions = {
+        scales: {
+            y: { beginAtZero: true, ticks: { color: '#e0e0e0' } },
+            x: { ticks: { color: '#e0e0e0' } }
+        },
+        plugins: { legend: { labels: { color: '#e0e0e0' } } }
+    };
+
+    // 1. Render Volume Chart
+    const volumeCtx = document.getElementById('volumeChart');
+    if (volumeCtx && volumeData.labels.length > 0) {
+        new Chart(volumeCtx, {
+            type: 'bar',
+            data: {
+                labels: volumeData.labels,
+                datasets: [{
+                    label: 'Total Weekly Volume (kg)',
+                    data: volumeData.data,
+                    backgroundColor: 'rgba(3, 218, 198, 0.6)',
+                    borderColor: 'rgba(3, 218, 198, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: chartOptions
+        });
+    }
+
+    // 2. Render Exercise Progression Chart
+    const exerciseCtx = document.getElementById('exerciseChart');
+    const exerciseSelect = document.getElementById('exerciseSelect');
+    let exerciseChart;
+
+    function renderExerciseChart(exerciseName) {
+        if (!exerciseCtx || !progressionData[exerciseName]) return;
+        if (exerciseChart) exerciseChart.destroy();
+
+        const labels = Object.keys(progressionData[exerciseName]).sort();
+        const data = labels.map(label => progressionData[exerciseName][label]);
+
+        exerciseChart = new Chart(exerciseCtx, {
+            type: 'line',
+            data: {
+                labels: labels.map(l => new Date(l).toLocaleDateString()),
+                datasets: [{ label: `Max Weight (kg) for ${exerciseName}`, data: data, fill: false, borderColor: '#03dac6', tension: 0.1 }]
+            },
+            options: chartOptions
+        });
+    }
+
+    if (exerciseSelect && exerciseSelect.options.length > 0) {
+        renderExerciseChart(exerciseSelect.value); // Initial render
+        exerciseSelect.addEventListener('change', (e) => renderExerciseChart(e.target.value));
+    }
+    });
+</script>
+{% endblock %}

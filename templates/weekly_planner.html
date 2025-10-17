@@ -4,11 +4,51 @@
 
 {% block main_content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mt-4">Your Weekly Planner</h1>
-    <span class="fs-5 text-muted">
-        {{ start_of_week.strftime('%B %d, %Y') }} - {{ (start_of_week + timedelta(days=6)).strftime('%B %d, %Y')
-        }}
-    </span>
+    <div class="mt-4">
+        <h1>Your Weekly Planner</h1>
+        <span class="fs-5 text-muted">
+            {{ start_of_week.strftime('%B %d, %Y') }} - {{ (start_of_week + timedelta(days=6)).strftime('%B %d, %Y')
+            }}
+        </span>
+    </div>
+    <div class="text-end mt-4 d-flex align-items-center justify-content-end gap-2">
+        <div id="navigation-controls">
+            <form id="navigation-form" class="d-inline-flex align-items-center gap-2">
+                <select id="year-select" name="year" class="form-select form-select-sm" style="width: auto;">
+                    {% for year in year_range %}
+                    <option value="{{ year }}" {% if year==selected_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+                <select id="month-select" name="month" class="form-select form-select-sm" style="width: auto;">
+                    {% for month_name in month_names %}
+                    <option value="{{ loop.index }}" {% if loop.index==selected_month %}selected{% endif %}>{{
+                        month_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select id="week-select" name="week" class="form-select form-select-sm" style="width: auto;">
+                    {% for week_num in range(1, num_weeks_in_month + 1) %}
+                    <option value="{{ week_num }}" {% if week_num==selected_week_in_month %}selected{% endif %}>
+                        Week {{ week_num }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">Today</a>
+            </form>
+            <!-- "Copy Last Week" Logic -->
+            {% if has_previous_week_workouts %}
+            <form method="POST" action="{{ url_for('copy_last_week') }}" class="d-inline-block ms-2">
+                <input type="hidden" name="current_week_start_date" value="{{ start_of_week.isoformat() }}">
+                <button type="submit" class="btn btn-sm btn-outline-info"
+                    title="Copy the plan from the previous week to this week. This will overwrite any existing exercises in the current week.">Copy
+                    Last Week</button>
+            </form>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-info disabled ms-2"
+                title="No workouts found in the previous week to copy.">Copy Last Week</button>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <div class="row">
@@ -18,14 +58,15 @@
             <div class="card-header">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">{{ day }} - <span class="text-primary">{{ workout.title if workout and
-                            workout.title else 'No Title' }}</span></h5>
+                            workout.title else ('Rest Day' if day == 'Sunday' or (workout and workout.is_rest_day) else
+                            'No Title') }}</span></h5>
                     <small class="text-muted">
                         {{ (start_of_week + timedelta(days=loop.index0)).strftime('%B %d') }}
                     </small>
                 </div>
             </div>
             <div class="card-body">
-                {% if workout and not workout.is_rest_day %}
+                {% if workout and not workout.is_rest_day and day != 'Sunday' %}
                 {% if workout.tasks %}
                 <!-- Progress Bar (now based on sets) -->
                 {% set total_sets = namespace(count=0) %}
@@ -53,14 +94,15 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
                                 <strong>{{ task.exercise_name }}</strong>: {{ task.sets|length }} sets of {{
-                                task.target_reps }} reps
+                                task.target_reps }} reps {% if task.rest_time %}({{ task.rest_time }} rest){% endif %}
                             </span>
                             <div class="btn-group">
                                 <button class="btn btn-sm btn-outline-secondary edit-exercise-btn"
                                     data-bs-toggle="modal" data-bs-target="#editExerciseModal"
                                     data-workout-id="{{ workout._id }}" data-task-id="{{ task._id }}"
                                     data-exercise-id="{{ task.exercise_id }}" data-sets="{{ task.sets|length }}"
-                                    data-reps="{{ task.target_reps }}">
+                                    data-reps="{{ task.target_reps }}" data-rest-time="{{ task.rest_time or '' }}"
+                                    data-notes="{{ task.notes or '' }}">
                                     <i class="fas fa-edit"></i> Edit
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger delete-task-btn" data-bs-toggle="modal"
@@ -69,6 +111,11 @@
                                     <i class="fas fa-trash-alt"></i> Delete</button>
                             </div>
                         </div>
+                        {% if task.notes %}
+                        <div class="ps-4 mt-1">
+                            <small class="text-muted fst-italic">Notes: {{ task.notes }}</small>
+                        </div>
+                        {% endif %}
                         <ul class="list-group list-group-flush mt-2">
                             {% for set_item in task.sets %}
                             <li class="list-group-item bg-transparent d-flex align-items-center ps-4">
@@ -105,30 +152,39 @@
                 <p class="text-muted">No exercises scheduled.</p>
                 {% endif %}
                 {% elif day == 'Sunday' or (workout and workout.is_rest_day) %}
+                <p class="text-success fw-bold">Rest Day</p>
                 {% if workout and workout.notes %}
                 <div class="fst-italic text-muted border-top pt-2 mt-2">
                     <strong>Notes:</strong> {{ workout.notes }}
                 </div>
                 {% endif %}
-                <p class="text-success fw-bold">Rest Day</p>
                 {% else %}
                 <p class="text-muted">No exercises scheduled.</p>
                 {% endif %}
             </div>
-            {% if day != 'Sunday' %}
             <div class="card-footer">
-                <!-- Placeholder for Add Exercise Form/Button -->
+                <!-- "Edit Day" button is available for all days to add notes or set rest day status -->
                 <button class="btn btn-sm btn-outline-secondary edit-day-btn" data-bs-toggle="modal"
                     data-bs-target="#editDayModal"
                     data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}"
                     data-notes="{{ workout.notes if workout else '' }}"
                     data-title="{{ workout.title if workout else '' }}"
-                    data-is-rest-day="{{ 'true' if workout and workout.is_rest_day else 'false' }}">Edit Day</button>
+                    data-is-rest-day="{{ 'true' if day == 'Sunday' or (workout and workout.is_rest_day) else 'false' }}">Edit
+                    Day</button>
+
+                <!-- "Add" button is only available for non-Sundays -->
+                {% if day != 'Sunday' %}
                 <button class="btn btn-sm btn-outline-primary add-exercise-btn" data-bs-toggle="modal"
                     data-bs-target="#addExerciseModal"
                     data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}">Add</button>
+
+                <button class="btn btn-sm btn-outline-success copy-day-btn" data-bs-toggle="modal"
+                    data-bs-target="#copyDayModal" data-source-workout-id="{{ workout._id if workout else '' }}"
+                    data-source-date="{{ (start_of_week + timedelta(days=loop.index0)).strftime('%A, %b %d') }}" {% if
+                    not workout or not workout.tasks %}disabled{% endif %}
+                    title="Copy this day's workout to another date">Copy</button>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
     {% endfor %}
@@ -137,6 +193,33 @@
 
 {% block body_end_scripts %}
 {{ super() }}
+<!-- Copy Day Modal -->
+<div class="modal fade" id="copyDayModal" tabindex="-1" aria-labelledby="copyDayModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('copy_day') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="copyDayModalLabel">Copy Workout</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="source_workout_id" id="source_workout_id">
+                    <p>Copying workout from <strong id="source-date-display"></strong>.</p>
+                    <div class="mb-3">
+                        <label for="target_date" class="form-label">Select date to copy to:</label>
+                        <input type="date" class="form-control" name="target_date" id="target_date" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Copy to Date</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 <!-- Edit Day Modal -->
 <div class="modal fade" id="editDayModal" tabindex="-1" aria-labelledby="editDayModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -204,6 +287,16 @@
                         <label for="reps" class="form-label">Reps</label>
                         <input type="text" class="form-control" name="reps" id="reps" placeholder="e.g., 8-12" required>
                     </div>
+                    <div class="mb-3">
+                        <label for="rest_time" class="form-label">Rest Time (optional)</label>
+                        <input type="text" class="form-control" name="rest_time" id="rest_time"
+                            placeholder="e.g., 90s, 2min">
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (optional)</label>
+                        <textarea class="form-control" name="notes" id="notes" rows="2"
+                            placeholder="e.g., Increase weight next time"></textarea>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -245,6 +338,16 @@
                         <input type="text" class="form-control" name="edit_reps" id="edit_reps" placeholder="e.g., 8-12"
                             required>
                     </div>
+                    <div class="mb-3">
+                        <label for="edit_rest_time" class="form-label">Rest Time (optional)</label>
+                        <input type="text" class="form-control" name="edit_rest_time" id="edit_rest_time"
+                            placeholder="e.g., 90s, 2min">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_notes" class="form-label">Notes (optional)</label>
+                        <textarea class="form-control" name="edit_notes" id="edit_notes" rows="2"
+                            placeholder="e.g., Focus on form"></textarea>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -279,6 +382,33 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // --- Toast Notification Helper ---
+        function showToast(message, category = 'info') {
+            const toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) return;
+
+            const categoryMap = {
+                'success': 'bg-success',
+                'danger': 'bg-danger',
+                'warning': 'bg-warning',
+                'info': 'bg-info'
+            };
+            const toastClass = categoryMap[category] || 'bg-secondary';
+
+            const toastWrapper = document.createElement('div');
+            toastWrapper.innerHTML = `
+                <div class="toast align-items-center text-white ${toastClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            const toastEl = toastWrapper.firstChild;
+            toastContainer.appendChild(toastEl);
+            new bootstrap.Toast(toastEl, { delay: 5000 }).show();
+        }
+
         var addExerciseModal = document.getElementById('addExerciseModal');
         addExerciseModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget; // Button that triggered the modal
@@ -299,11 +429,29 @@
             var modalTitleField = editDayModal.querySelector('#day_title');
             var modalNotesField = editDayModal.querySelector('#day_notes');
             var modalRestDayCheckbox = editDayModal.querySelector('#is_rest_day');
+            var modalTitleInput = editDayModal.querySelector('#day_title');
+
+            // For Sunday, disable the title input as it's always a rest day
+            if (new Date(workoutDate).getUTCDay() === 0) { // JS getUTCDay() is 0 for Sunday, 6 for Saturday.
+                modalTitleInput.disabled = true;
+            } else {
+                modalTitleInput.disabled = false;
+            }
 
             modalDateField.value = workoutDate;
             modalTitleField.value = currentTitle;
             modalNotesField.value = currentNotes;
             modalRestDayCheckbox.checked = isRestDay;
+        });
+
+        var copyDayModal = document.getElementById('copyDayModal');
+        copyDayModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var sourceWorkoutId = button.dataset.sourceWorkoutId;
+            var sourceDate = button.dataset.sourceDate;
+
+            copyDayModal.querySelector('#source_workout_id').value = sourceWorkoutId;
+            copyDayModal.querySelector('#source-date-display').textContent = sourceDate;
         });
 
         var editExerciseModal = document.getElementById('editExerciseModal');
@@ -317,6 +465,8 @@
             document.getElementById('edit_exercise_id').value = button.dataset.exerciseId;
             document.getElementById('edit_sets').value = button.dataset.sets;
             document.getElementById('edit_reps').value = button.dataset.reps;
+            document.getElementById('edit_rest_time').value = button.dataset.restTime;
+            document.getElementById('edit_notes').value = button.dataset.notes;
         });
 
 
@@ -407,13 +557,42 @@
                         // Hide the modal
                         const modal = bootstrap.Modal.getInstance(deleteConfirmationModal);
                         modal.hide();
+                        showToast('Exercise deleted successfully.', 'success');
                     } else {
                         console.error('Failed to delete task:', data.message);
-                        alert('Error: Could not delete the exercise.');
+                        showToast('Error: Could not delete the exercise.', 'danger');
                     }
                 })
                 .catch(error => console.error('Error:', error));
         });
     });
+
+    // --- New Navigation Script ---
+    document.addEventListener('DOMContentLoaded', function () {
+        const yearSelect = document.getElementById('year-select');
+        const monthSelect = document.getElementById('month-select');
+        const weekSelect = document.getElementById('week-select');
+
+        // Minor fix for JS date logic to match Python's week start on Monday
+        // In JS, Sunday is 0. In Python, Monday is 0. We need to adjust.
+        Date.prototype.getWeekDay = function () {
+            // Returns Monday = 0, ..., Sunday = 6
+            return (this.getDay() + 6) % 7;
+        };
+
+        function navigate() {
+            const year = yearSelect.value;
+            const month = monthSelect.value;
+            const week = weekSelect.value;
+            // When year or month changes, default to week 1
+            const weekQuery = event.target.id !== 'week-select' ? 1 : week;
+            window.location.href = `{{ url_for('dashboard') }}?year=${year}&month=${month}&week=${weekQuery}`;
+        }
+
+        yearSelect.addEventListener('change', navigate);
+        monthSelect.addEventListener('change', navigate);
+        weekSelect.addEventListener('change', navigate);
+    });
+
 </script>
 {% endblock %}

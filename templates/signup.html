@@ -9,15 +9,6 @@
             <div class="card-body">
                 <h3 class="card-title text-center mb-4">Create Account</h3>
 
-                <!-- Flash Messages -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-                {% endif %}
-                {% endwith %}
-
                 <form method="POST" action="{{ url_for('signup') }}">
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>

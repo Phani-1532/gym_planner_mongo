@@ -33,12 +33,52 @@
 
 <body>
     <div class="container-fluid p-0">
+        <!-- Toast Container for Flash Messages -->
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+            <!-- Toasts will be dynamically added here -->
+        </div>
         {% block content %}{% endblock %}
     </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    {% block body_end_scripts %}{% endblock %}
+    {% block body_end_scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            {% with messages = get_flashed_messages(with_categories = true) %}
+            {% if messages %}
+            const toastContainer = document.querySelector('.toast-container');
+            const categoryMap = {
+                'success': 'bg-success',
+                'danger': 'bg-danger',
+                'warning': 'bg-warning',
+                'info': 'bg-info'
+            };
+
+            {% for category, message in messages %}
+            const toastWrapper = document.createElement('div');
+            const toastClass = categoryMap['{{ category }}'] || 'bg-secondary';
+
+            toastWrapper.innerHTML = `
+                        <div class="toast align-items-center text-white ${toastClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                            <div class="d-flex">
+                                <div class="toast-body">
+                                    {{ message|safe }}
+                                </div>
+                                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                            </div>
+                        </div>
+                    `;
+            const toastEl = toastWrapper.firstChild;
+            toastContainer.appendChild(toastEl);
+            const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
+            toast.show();
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+        });
+    </script>
+    {% endblock %}
 </body>
 
 </html>
