@@ -899,4 +899,7 @@ def update_weekly_goals(user):
     return redirect(request.referrer or url_for('dashboard'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # For deployment, the host must be 0.0.0.0 and the port is set by the environment.
+    port = int(os.environ.get('PORT', 5000))
+    # debug=False is recommended for production.
+    app.run(host='0.0.0.0', port=port, debug=False)
