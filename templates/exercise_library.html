@@ -10,7 +10,7 @@
 </div>
 
 <div class="card">
-    <div class="card-body">
+    <div class="card-body table-responsive">
         <table class="table table-hover">
             <thead>
                 <tr>
@@ -25,18 +25,14 @@
                     <td>{{ exercise.name }}</td>
                     <td>{{ exercise.muscle_group }}</td>
                     <td class="text-end">
-                        <button class="btn btn-sm btn-outline-secondary edit-exercise-btn"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editExerciseLibraryModal"
-                                data-exercise-id="{{ exercise._id }}"
-                                data-exercise-name="{{ exercise.name }}"
-                                data-muscle-group="{{ exercise.muscle_group }}">
+                        <button class="btn btn-sm btn-outline-secondary edit-exercise-btn" data-bs-toggle="modal"
+                            data-bs-target="#editExerciseLibraryModal" data-exercise-id="{{ exercise._id }}"
+                            data-exercise-name="{{ exercise.name }}" data-muscle-group="{{ exercise.muscle_group }}">
                             <i class="fas fa-edit"></i> Edit
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-exercise-btn"
-                                data-bs-toggle="modal" data-bs-target="#deleteExerciseModal"
-                                data-exercise-id="{{ exercise._id }}"
-                                data-exercise-name="{{ exercise.name }}"><i class="fas fa-trash-alt"></i> Delete</button>
+                        <button class="btn btn-sm btn-outline-danger delete-exercise-btn" data-bs-toggle="modal"
+                            data-bs-target="#deleteExerciseModal" data-exercise-id="{{ exercise._id }}"
+                            data-exercise-name="{{ exercise.name }}"><i class="fas fa-trash-alt"></i> Delete</button>
                     </td>
                 </tr>
                 {% else %}
@@ -79,7 +75,8 @@
 </div>
 
 <!-- Edit Exercise Modal -->
-<div class="modal fade" id="editExerciseLibraryModal" tabindex="-1" aria-labelledby="editExerciseModalLabel" aria-hidden="true">
+<div class="modal fade" id="editExerciseLibraryModal" tabindex="-1" aria-labelledby="editExerciseModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="editExerciseForm" method="POST" action="">
@@ -90,11 +87,13 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="edit_exercise_name" class="form-label">Exercise Name</label>
-                        <input type="text" class="form-control" id="edit_exercise_name" name="edit_exercise_name" required>
+                        <input type="text" class="form-control" id="edit_exercise_name" name="edit_exercise_name"
+                            required>
                     </div>
                     <div class="mb-3">
                         <label for="edit_muscle_group" class="form-label">Muscle Group</label>
-                        <input type="text" class="form-control" id="edit_muscle_group" name="edit_muscle_group" required>
+                        <input type="text" class="form-control" id="edit_muscle_group" name="edit_muscle_group"
+                            required>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -107,7 +106,8 @@
 </div>
 
 <!-- Delete Exercise Confirmation Modal -->
-<div class="modal fade" id="deleteExerciseModal" tabindex="-1" aria-labelledby="deleteExerciseModalLabel" aria-hidden="true">
+<div class="modal fade" id="deleteExerciseModal" tabindex="-1" aria-labelledby="deleteExerciseModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="deleteExerciseForm" method="POST" action="">
@@ -117,7 +117,8 @@
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete the exercise: <strong id="exerciseNameToDelete"></strong>?</p>
-                    <p class="text-danger"><small>This action cannot be undone. The exercise will only be deleted if it is not currently in use in a workout plan.</small></p>
+                    <p class="text-danger"><small>This action cannot be undone. The exercise will only be deleted if it
+                            is not currently in use in a workout plan.</small></p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -132,32 +133,32 @@
 {% block body_end_scripts %}
 {{ super() }}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Handle Edit Modal
-    const editModal = document.getElementById('editExerciseLibraryModal');
-    editModal.addEventListener('show.bs.modal', function (event) {
-        const button = event.relatedTarget;
-        const exerciseId = button.dataset.exerciseId;
-        const exerciseName = button.dataset.exerciseName;
-        const muscleGroup = button.dataset.muscleGroup;
+    document.addEventListener('DOMContentLoaded', function () {
+        // Handle Edit Modal
+        const editModal = document.getElementById('editExerciseLibraryModal');
+        editModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const exerciseId = button.dataset.exerciseId;
+            const exerciseName = button.dataset.exerciseName;
+            const muscleGroup = button.dataset.muscleGroup;
 
-        const form = editModal.querySelector('#editExerciseForm');
-        form.action = `/edit-exercise-library/${exerciseId}`;
-        editModal.querySelector('#edit_exercise_name').value = exerciseName;
-        editModal.querySelector('#edit_muscle_group').value = muscleGroup;
+            const form = editModal.querySelector('#editExerciseForm');
+            form.action = `/edit-exercise-library/${exerciseId}`;
+            editModal.querySelector('#edit_exercise_name').value = exerciseName;
+            editModal.querySelector('#edit_muscle_group').value = muscleGroup;
+        });
+
+        // Handle Delete Modal
+        const deleteModal = document.getElementById('deleteExerciseModal');
+        deleteModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const exerciseId = button.dataset.exerciseId;
+            const exerciseName = button.dataset.exerciseName;
+
+            const form = deleteModal.querySelector('#deleteExerciseForm');
+            form.action = `/delete-exercise-library/${exerciseId}`;
+            deleteModal.querySelector('#exerciseNameToDelete').textContent = exerciseName;
+        });
     });
-
-    // Handle Delete Modal
-    const deleteModal = document.getElementById('deleteExerciseModal');
-    deleteModal.addEventListener('show.bs.modal', function (event) {
-        const button = event.relatedTarget;
-        const exerciseId = button.dataset.exerciseId;
-        const exerciseName = button.dataset.exerciseName;
-
-        const form = deleteModal.querySelector('#deleteExerciseForm');
-        form.action = `/delete-exercise-library/${exerciseId}`;
-        deleteModal.querySelector('#exerciseNameToDelete').textContent = exerciseName;
-    });
-});
 </script>
 {% endblock %}

@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from pymongo import MongoClient
 import bcrypt
 from functools import wraps
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from bson import ObjectId
 from dotenv import load_dotenv
 from monthly_handler import get_monthly_plan_context
@@ -19,6 +19,9 @@ load_dotenv()
 # 1. Initialize Flask App
 app = Flask(__name__)
 app.secret_key = os.urandom(24) # Generate a secret key for session management
+# Set the session to be permanent and last for 7 days
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+
 
 # 2. Configure MongoDB
 # Get the MongoDB URI from environment variables, with a default for local development
@@ -30,6 +33,7 @@ workout_days_collection = db.workout_days # Collection for workout days
 exercises_collection = db.exercises # Collection for exercises
 goals_collection = db.goals # Collection for user goals
 diet_entries_collection = db.diet_entries # Collection for diet entries
+weekly_goals_collection = db.weekly_goals # Collection for user-defined weekly goals
 
 # Seed the database with default exercises if none exist
 def seed_exercises():
@@ -46,12 +50,38 @@ def seed_exercises():
             {'name': 'Bicep Curls', 'muscle_group': 'Arms'},
             {'name': 'Tricep Dips', 'muscle_group': 'Arms'},
             {'name': 'Leg Press', 'muscle_group': 'Legs'},
+            {'name': 'Crunches', 'muscle_group': 'Abs'},
         ]
         exercises_collection.insert_many(default_exercises)
         print(f"Seeded {len(default_exercises)} exercises.")
 
 # Call the seed function when the application starts
 seed_exercises()
+
+# Define some expert-recommended workout plans
+EXPERT_PLANS = {
+    "Chest & Triceps": [
+        {"name": "Bench Press", "sets": 4, "reps": "8-12", "rest": "90s", "notes": "Focus on chest contraction."},
+        {"name": "Overhead Press", "sets": 3, "reps": "10-12", "rest": "60s", "notes": "Secondary focus on triceps."},
+        {"name": "Tricep Dips", "sets": 3, "reps": "AMRAP", "rest": "60s", "notes": "As Many Reps As Possible (AMRAP)."},
+    ],
+    "Back & Biceps": [
+        {"name": "Deadlift", "sets": 3, "reps": "5-8", "rest": "120s", "notes": "Heavy compound movement."},
+        {"name": "Pull Ups", "sets": 4, "reps": "AMRAP", "rest": "90s", "notes": "Focus on back engagement."},
+        {"name": "Bicep Curls", "sets": 3, "reps": "10-15", "rest": "60s", "notes": "Controlled curls."},
+    ],
+    "Legs, Forearms & Abs": [
+        {"name": "Squat", "sets": 4, "reps": "8-12", "rest": "120s", "notes": "Go deep and control the movement."},
+        {"name": "Leg Press", "sets": 3, "reps": "10-15", "rest": "90s", "notes": ""},
+        {"name": "Barbell Row", "sets": 3, "reps": "8-12", "rest": "90s", "notes": "This will also engage your forearms and grip strength."},
+        {"name": "Crunches", "sets": 3, "reps": "AMRAP", "rest": "60s", "notes": "Focus on core contraction."},
+    ],
+    "Shoulders & Chest": [
+        {"name": "Overhead Press", "sets": 4, "reps": "8-12", "rest": "90s", "notes": "Main shoulder movement."},
+        {"name": "Bench Press", "sets": 3, "reps": "8-12", "rest": "90s", "notes": "Focus on upper chest."},
+        {"name": "Pull Ups", "sets": 3, "reps": "AMRAP", "rest": "90s", "notes": "Works rear delts and back."},
+    ]
+}
 
 # 3. Helper function for protected routes
 def login_required(f):
@@ -85,6 +115,7 @@ def login():
             # Passwords match, log user in
             session['user_id'] = str(user['_id'])
             session['username'] = user['username']
+            session.permanent = True # Make the session permanent
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -197,9 +228,81 @@ def dashboard(user):
         day_name = date.fromisoformat(workout['date']).strftime('%A')
         week_plan[day_name] = workout
 
+    # --- Weekly Goals Progress Calculation ---
+    # Fetch user-defined weekly goals, or use an empty dict if none are set
+    user_weekly_goals_doc = weekly_goals_collection.find_one({'user_id': user['_id']})
+    user_weekly_goals = user_weekly_goals_doc.get('goals', {}) if user_weekly_goals_doc else {}
+
+    # Initialize progress based on user's goals
+    weekly_goals_progress = {goal: {'current': 0, 'target': target} for goal, target in user_weekly_goals.items() if target > 0}
+    all_muscle_groups = sorted(list(exercises_collection.distinct('muscle_group')))
+    
+    # Create a map of exercise_id to muscle_group for quick lookups
+    all_exercises_list = list(exercises_collection.find({}, {'_id': 1, 'muscle_group': 1}))
+    exercise_to_muscle_map = {str(ex['_id']): ex['muscle_group'] for ex in all_exercises_list}
+
+    # Iterate through each workout day in the fetched week plan
+    for workout in user_workouts:
+        if workout.get('is_rest_day') or not workout.get('tasks'):
+            continue
+
+        # Find all unique muscle groups trained on this day
+        trained_muscle_groups_today = set()
+        for task in workout.get('tasks', []):
+            exercise_id = str(task.get('exercise_id'))
+            muscle_group = exercise_to_muscle_map.get(exercise_id)
+            if muscle_group:
+                trained_muscle_groups_today.add(muscle_group)
+        
+        # For each unique muscle group trained, increment its weekly count
+        for muscle in trained_muscle_groups_today:
+            # We check if the muscle is one of our defined goals
+            if muscle in weekly_goals_progress:
+                weekly_goals_progress[muscle]['current'] += 1
+
     # Fetch all exercises to populate the dropdown in the modal
     # In a larger app, you might want to filter this by user-created exercises vs global ones
     all_exercises = list(exercises_collection.find({}))
+
+    # --- Progress Snapshot Calculation ---
+    progress_snapshot = {
+        'volume_trend': {'labels': [], 'data': []},
+        'current_week_volume': 0,
+        'previous_week_volume': 0,
+        'percentage_change': 0
+    }
+    
+    # Fetch last 8 weeks of workouts for volume trend
+    eight_weeks_ago = start_of_week - timedelta(weeks=8)
+    recent_workouts = list(workout_days_collection.find({
+        'user_id': user['_id'],
+        'date': {'$gte': eight_weeks_ago.isoformat(), '$lte': end_of_week.isoformat()},
+        'tasks.0': {'$exists': True}
+    }).sort('date', 1))
+
+    if recent_workouts:
+        weekly_volume = get_progress_data(user, workout_days_collection, recent_workouts_only=recent_workouts)['volume_data']
+        
+        # Limit to last 8 weeks for the chart
+        progress_snapshot['volume_trend']['labels'] = weekly_volume['labels'][-8:]
+        progress_snapshot['volume_trend']['data'] = weekly_volume['data'][-8:]
+
+        # Find current and previous week's volume from the calculated data
+        current_week_label = start_of_week.strftime('%b %d, %Y')
+        previous_week_start = start_of_week - timedelta(days=7)
+        previous_week_label = previous_week_start.strftime('%b %d, %Y')
+
+        if current_week_label in weekly_volume['labels']:
+            current_index = weekly_volume['labels'].index(current_week_label)
+            progress_snapshot['current_week_volume'] = weekly_volume['data'][current_index]
+
+        if previous_week_label in weekly_volume['labels']:
+            previous_index = weekly_volume['labels'].index(previous_week_label)
+            progress_snapshot['previous_week_volume'] = weekly_volume['data'][previous_index]
+
+        if progress_snapshot['previous_week_volume'] > 0:
+            change = progress_snapshot['current_week_volume'] - progress_snapshot['previous_week_volume']
+            progress_snapshot['percentage_change'] = round((change / progress_snapshot['previous_week_volume']) * 100)
 
     return render_template('weekly_planner.html', 
                            week_plan=week_plan, 
@@ -213,7 +316,12 @@ def dashboard(user):
                            year_range=year_range,
                            month_names=month_names,
                            num_weeks_in_month=num_weeks_in_month,
-                           has_previous_week_workouts=has_previous_week_workouts)
+                           has_previous_week_workouts=has_previous_week_workouts,
+                           expert_plans=EXPERT_PLANS,
+                           weekly_goals_progress=weekly_goals_progress,
+                           user_weekly_goals=user_weekly_goals,
+                           all_muscle_groups=all_muscle_groups,
+                           progress_snapshot=progress_snapshot, json_dumps=json_dumps)
 
 @app.route('/monthly-plan')
 @login_required
@@ -252,7 +360,7 @@ def delete_exercise_library(exercise_id, **kwargs):
 @login_required
 def progress_tracker(**kwargs):
     user = kwargs.get('user')
-    context = get_progress_data(user, workout_days_collection)
+    context = get_progress_data(user, workout_days_collection, recent_workouts_only=None)
     return render_template('progress_tracker.html', json_dumps=json_dumps, **context)
 
 @app.route('/goal-setting', methods=['GET', 'POST'])
@@ -614,7 +722,13 @@ def copy_last_week(user):
     except Exception as e:
         flash(f'An error occurred while copying the plan: {e}', 'danger')
     
-    return redirect(request.referrer or url_for('dashboard'))
+    # Add a cache-busting parameter to the redirect URL to ensure fresh data is loaded
+    redirect_url = request.referrer or url_for('dashboard')
+    if '?' in redirect_url:
+        redirect_url += f'&_t={datetime.now().timestamp()}'
+    else:
+        redirect_url += f'?_t={datetime.now().timestamp()}'
+    return redirect(redirect_url)
 
 @app.route('/copy-day', methods=['POST'])
 @login_required
@@ -678,5 +792,111 @@ def delete_diet_entry_route(entry_id, **kwargs):
     delete_diet_entry(entry_id, user, diet_entries_collection)
     return redirect(url_for('diet_plan', date=redirect_date))
 # Run the App
+
+@app.route('/clear-workout-day', methods=['POST'])
+@login_required
+def clear_workout_day(user):
+    try:
+        workout_date_str = request.form.get('clear_workout_date')
+        if not workout_date_str:
+            flash('Missing date for the day to clear.', 'danger')
+            return redirect(request.referrer or url_for('dashboard'))
+
+        # Update the workout day: set tasks to an empty array and clear the title
+        result = workout_days_collection.update_one(
+            {'user_id': user['_id'], 'date': workout_date_str},
+            {'$set': {'tasks': [], 'title': ''}}
+        )
+
+        if result.modified_count > 0:
+            flash('All exercises for the day have been cleared.', 'success')
+        else:
+            flash('No exercises to clear for that day.', 'info')
+    except Exception as e:
+        flash(f'An error occurred while clearing the day: {e}', 'danger')
+    return redirect(request.referrer or url_for('dashboard'))
+
+@app.route('/apply-expert-plan', methods=['POST'])
+@login_required
+def apply_expert_plan(user):
+    try:
+        workout_date_str = request.form.get('expert_plan_date')
+        plan_name = request.form.get('expert_plan_name')
+
+        if not workout_date_str or not plan_name:
+            flash('Missing date or plan name.', 'danger')
+            return redirect(request.referrer or url_for('dashboard'))
+
+        plan_template = EXPERT_PLANS.get(plan_name)
+        if not plan_template:
+            flash(f'Expert plan "{plan_name}" not found.', 'danger')
+            return redirect(request.referrer or url_for('dashboard'))
+
+        # 1. Build the list of tasks from the template
+        new_tasks = []
+        for exercise_template in plan_template:
+            exercise_doc = exercises_collection.find_one({'name': exercise_template['name']})
+            if not exercise_doc:
+                # If an exercise from the plan doesn't exist in the DB, skip it.
+                # In a real-world scenario, you might flash a warning.
+                continue
+
+            num_sets = int(exercise_template['sets'])
+            set_list = [{"_id": ObjectId(), "set_number": i + 1, "completed": False, "weight_kg": "", "actual_reps": ""}
+                        for i in range(num_sets)]
+
+            new_tasks.append({
+                '_id': ObjectId(),
+                'exercise_id': exercise_doc['_id'],
+                'exercise_name': exercise_doc['name'],
+                'target_reps': exercise_template['reps'],
+                'sets': set_list,
+                'rest_time': exercise_template.get('rest', ''),
+                'notes': exercise_template.get('notes', '')
+            })
+
+        # 2. Create the new workout day data
+        new_workout_data = {
+            'user_id': user['_id'],
+            'date': workout_date_str,
+            'title': plan_name,
+            'tasks': new_tasks,
+            'is_rest_day': False,
+            'notes': 'Applied from expert recommendations.'
+        }
+
+        # 3. Overwrite any existing workout on the target date (upsert)
+        workout_days_collection.find_one_and_replace({'user_id': user['_id'], 'date': workout_date_str}, new_workout_data, upsert=True)
+        flash(f'"{plan_name}" applied successfully!', 'success')
+    except Exception as e:
+        flash(f'An error occurred while applying the plan: {e}', 'danger')
+    return redirect(request.referrer or url_for('dashboard'))
+
+@app.route('/update-weekly-goals', methods=['POST'])
+@login_required
+def update_weekly_goals(user):
+    try:
+        goals = {}
+        for key, value in request.form.items():
+            if key.startswith('goal_'):
+                muscle_group = key.replace('goal_', '')
+                try:
+                    target = int(value)
+                    if target >= 0: # Allow setting goals to 0
+                        goals[muscle_group] = target
+                except (ValueError, TypeError):
+                    # Ignore non-integer values
+                    continue
+        
+        weekly_goals_collection.update_one(
+            {'user_id': user['_id']},
+            {'$set': {'user_id': user['_id'], 'goals': goals}},
+            upsert=True
+        )
+        flash('Weekly goals updated successfully!', 'success')
+    except Exception as e:
+        flash(f'An error occurred while updating goals: {e}', 'danger')
+    return redirect(request.referrer or url_for('dashboard'))
+
 if __name__ == '__main__':
     app.run(debug=True)

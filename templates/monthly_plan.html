@@ -7,7 +7,7 @@
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 1px;
+        gap: 2px;
         background-color: #333;
         border: 1px solid #333;
     }
@@ -72,11 +72,23 @@
         /* Green for rest day */
         margin-top: 0.25rem;
     }
+
+    @media (max-width: 768px) {
+        .calendar-day {
+            min-height: 80px;
+            padding: 0.25rem;
+        }
+
+        .workout-title,
+        .workout-rest {
+            font-size: 0.7rem;
+        }
+    }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4 mt-4">
-    <h1>{{ selected_date.strftime('%B %Y') }}</h1>
-    <div>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 mt-4">
+    <h1 class="text-center text-md-start">{{ selected_date.strftime('%B %Y') }}</h1>
+    <div class="mt-2 mt-md-0">
         {% set prev_month = selected_date.month - 1 %}
         {% set prev_year = selected_date.year %}
         {% if prev_month == 0 %}

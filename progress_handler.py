@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-def get_progress_data(user, workout_days_collection):
+def get_progress_data(user, workout_days_collection, recent_workouts_only=None):
     """
     Fetches and processes workout data to generate statistics for charts.
 
@@ -12,11 +12,14 @@ def get_progress_data(user, workout_days_collection):
     Returns:
         A dictionary containing processed data for volume and exercise progression.
     """
-    # Fetch all workout days for the user that have at least one exercise task
-    workouts = list(workout_days_collection.find({
-        'user_id': user['_id'],
-        'tasks.0': {'$exists': True}
-    }).sort('date', 1))
+    if recent_workouts_only is not None:
+        workouts = recent_workouts_only
+    else:
+        # Fetch all workout days for the user that have at least one exercise task
+        workouts = list(workout_days_collection.find({
+            'user_id': user['_id'],
+            'tasks.0': {'$exists': True}
+        }).sort('date', 1))
 
     if not workouts:
         return {
@@ -38,9 +41,9 @@ def get_progress_data(user, workout_days_collection):
                 for s in task.get('sets', []):
                     try:
                         weight = float(s.get('weight_kg', 0))
-                        reps = int(s.get('actual_reps', 0))
-                        if weight > 0 and reps > 0:
-                            day_volume += weight * reps
+                        # Summing just the weight for each set, as requested.
+                        if weight > 0:
+                            day_volume += weight
                     except (ValueError, TypeError):
                         continue # Skip if weight/reps are not valid numbers
             weekly_volume[week_label] += day_volume

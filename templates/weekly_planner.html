@@ -3,17 +3,18 @@
 {% block title %}Weekly Planner - Gym Planner{% endblock %}
 
 {% block main_content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div class="mt-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
+    <div class="mt-4 text-center text-md-start">
         <h1>Your Weekly Planner</h1>
         <span class="fs-5 text-muted">
             {{ start_of_week.strftime('%B %d, %Y') }} - {{ (start_of_week + timedelta(days=6)).strftime('%B %d, %Y')
             }}
         </span>
     </div>
-    <div class="text-end mt-4 d-flex align-items-center justify-content-end gap-2">
-        <div id="navigation-controls">
-            <form id="navigation-form" class="d-inline-flex align-items-center gap-2">
+    <div class="mt-4">
+        <div id="navigation-controls"
+            class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-end gap-2">
+            <form id="navigation-form" class="d-flex flex-column flex-sm-row gap-2">
                 <select id="year-select" name="year" class="form-select form-select-sm" style="width: auto;">
                     {% for year in year_range %}
                     <option value="{{ year }}" {% if year==selected_year %}selected{% endif %}>{{ year }}</option>
@@ -37,19 +38,96 @@
             </form>
             <!-- "Copy Last Week" Logic -->
             {% if has_previous_week_workouts %}
-            <form method="POST" action="{{ url_for('copy_last_week') }}" class="d-inline-block ms-2">
+            <form method="POST" action="{{ url_for('copy_last_week') }}" class="d-block">
                 <input type="hidden" name="current_week_start_date" value="{{ start_of_week.isoformat() }}">
                 <button type="submit" class="btn btn-sm btn-outline-info"
                     title="Copy the plan from the previous week to this week. This will overwrite any existing exercises in the current week.">Copy
                     Last Week</button>
             </form>
             {% else %}
-            <button type="button" class="btn btn-sm btn-outline-info disabled ms-2"
+            <button type="button" class="btn btn-sm btn-outline-info disabled"
                 title="No workouts found in the previous week to copy.">Copy Last Week</button>
             {% endif %}
         </div>
     </div>
 </div>
+
+<!-- Weekly Goals Panel -->
+<div class="card mb-4">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">This Week's Goals</h5>
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                data-bs-target="#manageGoalsModal">Manage Goals</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for muscle, progress in weekly_goals_progress.items()|sort %}
+            <div class="col-6 col-md-4 col-lg-3 mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="goal-{{ muscle }}" {% if progress.current>=
+                    progress.target %}checked{% endif %} disabled>
+                    <label class="form-check-label" for="goal-{{ muscle }}">
+                        Train {{ muscle }}: {{ [progress.current, progress.target]|min }} / {{ progress.target }}
+                    </label>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-muted">No weekly goals have been set up.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Progress Snapshot Panel -->
+<div class="card mb-4">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Progress Snapshot</h5>
+            <a href="{{ url_for('progress_tracker') }}" class="btn btn-sm btn-outline-secondary">View Full Report</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-4 mb-3 mb-md-0">
+                <div class="d-flex justify-content-around text-center">
+                    <div>
+                        <h6 class="text-muted">Total Weight Lifted</h6>
+                        <p class="fs-4 fw-bold mb-0">{{ "%.0f"|format(progress_snapshot.current_week_volume) }} kg</p>
+                    </div>
+                    <div>
+                        <h6 class="text-muted">vs. Last Week</h6>
+                        {% if progress_snapshot.percentage_change > 0 %}
+                        <p class="fs-4 fw-bold text-success mb-0">
+                            +{{ progress_snapshot.percentage_change }}%
+                        </p>
+                        {% elif progress_snapshot.percentage_change < 0 %} <p class="fs-4 fw-bold text-danger mb-0">
+                            {{ progress_snapshot.percentage_change }}%
+                            </p>
+                            {% else %}
+                            <p class="fs-4 fw-bold text-muted mb-0">
+                                --
+                            </p>
+                            {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                {% if progress_snapshot.volume_trend.data %}
+                <canvas id="volumeTrendChart" style="max-height: 100px;"></canvas>
+                {% else %}
+                <div class="d-flex align-items-center justify-content-center h-100 text-center">
+                    <p class="text-muted">
+                        Log workouts with weight and reps to see your volume trend.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <div class="row">
     {% for day, workout in week_plan.items() %}
@@ -119,24 +197,27 @@
                         <ul class="list-group list-group-flush mt-2">
                             {% for set_item in task.sets %}
                             <li class="list-group-item bg-transparent d-flex align-items-center ps-4">
-                                <span class="me-3">Set {{ set_item.set_number }}</span>
-                                <div class="input-group input-group-sm me-2" style="width: 120px;">
-                                    <input type="text" class="form-control set-detail-input" placeholder="Weight"
-                                        data-field="weight_kg" value="{{ set_item.weight_kg or '' }}"
+                                <div
+                                    class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center w-100">
+                                    <span class="me-3 mb-2 mb-sm-0">Set {{ set_item.set_number }}</span>
+                                    <div class="input-group input-group-sm me-sm-2 mb-2 mb-sm-0 flex-grow-1">
+                                        <input type="text" class="form-control set-detail-input" placeholder="Weight"
+                                            data-field="weight_kg" value="{{ set_item.weight_kg or '' }}"
+                                            data-workout-id="{{ workout._id }}" data-task-id="{{ task._id }}"
+                                            data-set-id="{{ set_item._id }}">
+                                        <span class="input-group-text">kg</span>
+                                    </div>
+                                    <div class="input-group input-group-sm me-sm-auto flex-grow-1">
+                                        <input type="text" class="form-control set-detail-input" placeholder="Reps"
+                                            data-field="actual_reps" value="{{ set_item.actual_reps or '' }}"
+                                            data-workout-id="{{ workout._id }}" data-task-id="{{ task._id }}"
+                                            data-set-id="{{ set_item._id }}">
+                                        <span class="input-group-text">reps</span>
+                                    </div>
+                                    <input class="form-check-input ms-sm-3" type="checkbox"
                                         data-workout-id="{{ workout._id }}" data-task-id="{{ task._id }}"
-                                        data-set-id="{{ set_item._id }}">
-                                    <span class="input-group-text">kg</span>
+                                        data-set-id="{{ set_item._id }}" {% if set_item.completed %}checked{% endif %}>
                                 </div>
-                                <div class="input-group input-group-sm me-auto" style="width: 100px;">
-                                    <input type="text" class="form-control set-detail-input" placeholder="Reps"
-                                        data-field="actual_reps" value="{{ set_item.actual_reps or '' }}"
-                                        data-workout-id="{{ workout._id }}" data-task-id="{{ task._id }}"
-                                        data-set-id="{{ set_item._id }}">
-                                    <span class="input-group-text">reps</span>
-                                </div>
-                                <input class="form-check-input set-checkbox" type="checkbox"
-                                    data-workout-id="{{ workout._id }}" data-task-id="{{ task._id }}"
-                                    data-set-id="{{ set_item._id }}" {% if set_item.completed %}checked{% endif %}>
                             </li>
                             {% endfor %}
                         </ul>
@@ -163,27 +244,39 @@
                 {% endif %}
             </div>
             <div class="card-footer">
-                <!-- "Edit Day" button is available for all days to add notes or set rest day status -->
-                <button class="btn btn-sm btn-outline-secondary edit-day-btn" data-bs-toggle="modal"
-                    data-bs-target="#editDayModal"
-                    data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}"
-                    data-notes="{{ workout.notes if workout else '' }}"
-                    data-title="{{ workout.title if workout else '' }}"
-                    data-is-rest-day="{{ 'true' if day == 'Sunday' or (workout and workout.is_rest_day) else 'false' }}">Edit
-                    Day</button>
+                <div class="d-flex flex-wrap gap-2">
+                    <!-- "Edit Day" button is available for all days to add notes or set rest day status -->
+                    <button class="btn btn-sm btn-outline-secondary edit-day-btn" data-bs-toggle="modal"
+                        data-bs-target="#editDayModal"
+                        data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}"
+                        data-notes="{{ workout.notes if workout else '' }}"
+                        data-title="{{ workout.title if workout else '' }}"
+                        data-is-rest-day="{{ 'true' if day == 'Sunday' or (workout and workout.is_rest_day) else 'false' }}">Edit
+                        Day</button>
 
-                <!-- "Add" button is only available for non-Sundays -->
-                {% if day != 'Sunday' %}
-                <button class="btn btn-sm btn-outline-primary add-exercise-btn" data-bs-toggle="modal"
-                    data-bs-target="#addExerciseModal"
-                    data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}">Add</button>
+                    <!-- "Add" button is only available for non-Sundays -->
+                    {% if day != 'Sunday' %}
+                    <button class="btn btn-sm btn-outline-primary add-exercise-btn" data-bs-toggle="modal"
+                        data-bs-target="#addExerciseModal"
+                        data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}">Add</button>
 
-                <button class="btn btn-sm btn-outline-success copy-day-btn" data-bs-toggle="modal"
-                    data-bs-target="#copyDayModal" data-source-workout-id="{{ workout._id if workout else '' }}"
-                    data-source-date="{{ (start_of_week + timedelta(days=loop.index0)).strftime('%A, %b %d') }}" {% if
-                    not workout or not workout.tasks %}disabled{% endif %}
-                    title="Copy this day's workout to another date">Copy</button>
-                {% endif %}
+                    <button class="btn btn-sm btn-outline-success copy-day-btn" data-bs-toggle="modal"
+                        data-bs-target="#copyDayModal" data-source-workout-id="{{ workout._id if workout else '' }}"
+                        data-source-date="{{ (start_of_week + timedelta(days=loop.index0)).strftime('%A, %b %d') }}" {%
+                        if not workout or not workout.tasks %}disabled{% endif %}
+                        title="Copy this day's workout to another date">Copy</button>
+
+                    <button class="btn btn-sm btn-outline-warning expert-plan-btn" data-bs-toggle="modal"
+                        data-bs-target="#expertPlanModal"
+                        data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}">Expert Plan</button>
+
+                    <button class="btn btn-sm btn-outline-danger clear-day-btn" data-bs-toggle="modal"
+                        data-bs-target="#clearDayModal"
+                        data-date="{{ (start_of_week + timedelta(days=loop.index0)).isoformat() }}"
+                        data-day-name="{{ day }}" {% if not workout or not workout.tasks %}disabled{% endif %}>Clear
+                        Day</button>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -193,6 +286,96 @@
 
 {% block body_end_scripts %}
 {{ super() }}
+<!-- Clear Day Confirmation Modal -->
+<div class="modal fade" id="clearDayModal" tabindex="-1" aria-labelledby="clearDayModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('clear_workout_day') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="clearDayModalLabel">Confirm Clear Day</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="clear_workout_date" id="clear_workout_date">
+                    <p>Are you sure you want to delete all exercises for <strong id="clear-day-name-display"></strong>?
+                        This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Clear All Exercises</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Expert Plan Modal -->
+<!-- Manage Weekly Goals Modal -->
+<div class="modal fade" id="manageGoalsModal" tabindex="-1" aria-labelledby="manageGoalsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('update_weekly_goals') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="manageGoalsModalLabel">Manage Weekly Goals</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Set how many times you want to train each muscle group per week. Set to 0 to not track.</p>
+                    <div class="row">
+                        {% for muscle in all_muscle_groups %}
+                        <div class="col-md-6">
+                            <div class="input-group mb-3">
+                                <span class="input-group-text" style="width: 120px;">{{ muscle }}</span>
+                                <input type="number" class="form-control" name="goal_{{ muscle }}"
+                                    value="{{ user_weekly_goals.get(muscle, 0) }}" min="0" max="7">
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No muscle groups found. Add exercises to the library first.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Goals</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- Expert Plan Modal -->
+<div class="modal fade" id="expertPlanModal" tabindex="-1" aria-labelledby="expertPlanModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('apply_expert_plan') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="expertPlanModalLabel">Apply an Expert Plan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="expert_plan_date" id="expert_plan_date">
+                    <p>Choose a plan to apply. This will <strong class="text-danger">overwrite</strong> any existing
+                        exercises for the selected day.</p>
+                    <div class="mb-3">
+                        <label for="expert_plan_name" class="form-label">Available Plans</label>
+                        <select class="form-select" name="expert_plan_name" id="expert_plan_name" required>
+                            <option selected disabled value="">Choose a plan...</option>
+                            {% for plan_name in expert_plans.keys()|sort %}
+                            <option value="{{ plan_name }}">{{ plan_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Apply Plan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <!-- Copy Day Modal -->
 <div class="modal fade" id="copyDayModal" tabindex="-1" aria-labelledby="copyDayModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -454,6 +637,13 @@
             copyDayModal.querySelector('#source-date-display').textContent = sourceDate;
         });
 
+        var expertPlanModal = document.getElementById('expertPlanModal');
+        expertPlanModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var workoutDate = button.getAttribute('data-date');
+            expertPlanModal.querySelector('#expert_plan_date').value = workoutDate;
+        });
+
         var editExerciseModal = document.getElementById('editExerciseModal');
         editExerciseModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
@@ -469,13 +659,21 @@
             document.getElementById('edit_notes').value = button.dataset.notes;
         });
 
+        var clearDayModal = document.getElementById('clearDayModal');
+        clearDayModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var workoutDate = button.dataset.date;
+            var dayName = button.dataset.dayName;
+            clearDayModal.querySelector('#clear_workout_date').value = workoutDate;
+            clearDayModal.querySelector('#clear-day-name-display').textContent = dayName;
+        });
 
 
 
 
 
         // Handle set completion checkboxes
-        document.querySelectorAll('.set-checkbox').forEach(function (checkbox) {
+        document.querySelectorAll('.form-check-input[data-set-id]').forEach(function (checkbox) {
             checkbox.addEventListener('change', function () {
                 const workoutId = this.dataset.workoutId;
                 const taskId = this.dataset.taskId;
@@ -484,7 +682,7 @@
 
                 // Update progress bar immediately
                 const cardBody = this.closest('.card');
-                const progressBar = cardBody.querySelector('.progress-bar');
+                const progressBar = cardBody.querySelector('.progress-bar'); // This might be null if no tasks
                 const allCheckboxes = cardBody.querySelectorAll('.set-checkbox');
                 const totalSets = allCheckboxes.length;
                 const completedSets = Array.from(allCheckboxes).filter(cb => cb.checked).length;
@@ -492,7 +690,9 @@
 
                 progressBar.style.width = newProgress + '%';
                 progressBar.textContent = `${completedSets} / ${totalSets}`;
-                progressBar.setAttribute('aria-valuenow', newProgress);
+                if (progressBar) {
+                    progressBar.setAttribute('aria-valuenow', newProgress);
+                }
 
                 // Send update to the server
                 fetch("{{ url_for('toggle_set_completion') }}", {
@@ -567,6 +767,39 @@
         });
     });
 
+    // Handle set detail input (weight/reps)
+    document.querySelectorAll('.set-detail-input').forEach(function (input) {
+        let debounceTimer;
+        input.addEventListener('input', function () {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const workoutId = this.dataset.workoutId;
+                const taskId = this.dataset.taskId;
+                const setId = this.dataset.setId;
+                const field = this.dataset.field;
+                const value = this.value;
+
+                fetch("{{ url_for('update_set_details') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        workout_day_id: workoutId,
+                        task_id: taskId,
+                        set_id: setId,
+                        [field]: value
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // Reload to update weekly goals progress.
+                            window.location.reload();
+                        }
+                    }).catch(err => console.error(err));
+            }, 1000); // Wait 1 second after user stops typing
+        });
+    });
+
     // --- New Navigation Script ---
     document.addEventListener('DOMContentLoaded', function () {
         const yearSelect = document.getElementById('year-select');
@@ -592,6 +825,48 @@
         yearSelect.addEventListener('change', navigate);
         monthSelect.addEventListener('change', navigate);
         weekSelect.addEventListener('change', navigate);
+    });
+
+    // --- Progress Snapshot Chart ---
+    document.addEventListener('DOMContentLoaded', function () {
+        const snapshotData = {{ json_dumps(progress_snapshot.volume_trend) | safe
+    }};
+    const trendCtx = document.getElementById('volumeTrendChart');
+
+    if (trendCtx && snapshotData.data.length > 0) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: snapshotData.labels,
+                datasets: [{
+                    label: 'Total Weight Lifted (kg)',
+                    data: snapshotData.data,
+                    fill: true,
+                    backgroundColor: 'rgba(3, 218, 198, 0.2)',
+                    borderColor: 'rgba(3, 218, 198, 1)',
+                    tension: 0.3,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    y: { display: false, beginAtZero: true },
+                    x: { display: false }
+                }
+            }
+        });
+    }
     });
 
 </script>
